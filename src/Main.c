@@ -1,7 +1,18 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <stdlib.h>
+#include <math.h>
 #include <stdio.h>
+
+typedef struct {
+    float x;
+    float y;
+} Vec2;
+
+Vec2  vec2(float x, float y);
+float vec2_length(Vec2 vec);
+Vec2  vec2_normalize(Vec2 vec);
+void  vec2_log(Vec2 vec);
 
 typedef GLuint Shader;
 typedef GLuint VAO;
@@ -107,6 +118,10 @@ int main()
         return EXIT_FAILURE;
     }
 
+    Vec2 vec = vec2(4.f, 3.f);
+    vec2_log(vec);
+    vec2_log(vec2_normalize(vec));
+
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
 
     VAO VAO = vao_create();
@@ -144,6 +159,43 @@ int main()
     glfwDestroyWindow(window);
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+
+// Vec2
+
+Vec2 vec2(float x, float y)
+{
+    Vec2 vec =
+    {
+        .x = x,
+        .y = y,
+    };
+    return vec;
+}
+
+float vec2_length(Vec2 vec)
+{
+    return (float)(sqrt(pow(vec.x, 2) + pow(vec.y, 2)));
+}
+
+Vec2 vec2_normalize(Vec2 vec)
+{
+    float length = vec2_length(vec);
+    if (length == 0.f)
+    {
+        return vec2(0.f, 0.f);
+    }
+    Vec2 normalizedVec =
+    {
+        .x = vec.x / length,
+        .y = vec.y / length,
+    };
+    return normalizedVec;
+}
+
+void vec2_log(Vec2 vec)
+{
+    printf("X: %.2f; Y: %.2f\n", vec.x, vec.y);
 }
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
