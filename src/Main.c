@@ -8,6 +8,8 @@ typedef GLuint VAO;
 typedef GLuint VBO;
 typedef GLuint EBO;
 
+void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+
 Shader shader_create(const char* vertexShaderSource, const char* fragmentShaderSource);
 void   shader_use(Shader ID);
 void   shader_delete(Shader ID);
@@ -92,6 +94,7 @@ int main()
         return EXIT_FAILURE;
     }
     glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
 
     GLenum glewStatus = glewInit();
@@ -141,6 +144,12 @@ int main()
     glfwDestroyWindow(window);
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+
+void framebufferSizeCallback(GLFWwindow* window, int width, int height)
+{
+    (void)window;
+    glViewport(0, 0, width, height);
 }
 
 // Shader
