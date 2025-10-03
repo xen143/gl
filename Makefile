@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
+LIBS = -lGL -lGLEW -lglfw
 
 SRC_DIR = src
 OBJ_DIR = build/obj
@@ -19,7 +20,7 @@ all: $(BIN)
 
 $(BIN): $(OBJ)
 	@mkdir -p $(BIN_DIR)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 	@rm -rf $(OBJ_DIR)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
