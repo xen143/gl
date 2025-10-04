@@ -12,11 +12,16 @@ typedef struct {
 Vec2  vec2(float x, float y);
 float vec2_length(Vec2 vec);
 Vec2  vec2_normalize(Vec2 vec);
+Vec2  vec2_add(Vec2 vecOne, Vec2 vecTwo);
+Vec2  vec2_sub(Vec2 vecOne, Vec2 vecTwo);
+Vec2  vec2_scale(Vec2 vec, float scalar);
+Vec2  vec2_div(Vec2 vec, float divisor);
+float vec2_dot(Vec2 vecOne, Vec2 vecTwo);
 void  vec2_log(Vec2 vec);
 
 typedef GLuint Shader;
 typedef GLuint VAO;
-typedef GLuint VBO;
+typedef GLuint VBO; 
 typedef GLuint EBO;
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
@@ -118,9 +123,9 @@ int main()
         return EXIT_FAILURE;
     }
 
-    Vec2 vec = vec2(4.f, 3.f);
-    vec2_log(vec);
-    vec2_log(vec2_normalize(vec));
+    Vec2 vecOne = vec2(4.f, 3.f);
+    Vec2 vecTwo = vec2(1.f, 1.f);
+    printf("%.2f\n", vec2_dot(vec2_normalize(vecOne), vecTwo));
 
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
 
@@ -191,6 +196,55 @@ Vec2 vec2_normalize(Vec2 vec)
         .y = vec.y / length,
     };
     return normalizedVec;
+}
+
+Vec2 vec2_add(Vec2 vecOne, Vec2 vecTwo)
+{
+    Vec2 result =
+    {
+        .x = vecOne.x + vecTwo.x,
+        .y = vecOne.y + vecTwo.y,
+    };
+    return result;
+}
+
+Vec2 vec2_sub(Vec2 vecOne, Vec2 vecTwo)
+{
+    Vec2 result =
+    {
+        .x = vecOne.x - vecTwo.x,
+        .y = vecOne.y - vecTwo.y,
+    };
+    return result;
+}
+
+Vec2 vec2_scale(Vec2 vec, float scalar)
+{
+    Vec2 result =
+    {
+        .x = vec.x * scalar,
+        .y = vec.y * scalar,
+    };
+    return result;
+}
+
+Vec2 vec2_div(Vec2 vec, float divisor)
+{
+    if (divisor == 0.f)
+    {
+        return vec2(0.f, 0.f);
+    }
+    Vec2 result =
+    {
+        .x = vec.x / divisor,
+        .y = vec.y / divisor,
+    };
+    return result;
+}
+
+float vec2_dot(Vec2 vecOne, Vec2 vecTwo)
+{
+    return vecOne.x * vecTwo.x + vecOne.y * vecTwo.y;
 }
 
 void vec2_log(Vec2 vec)
