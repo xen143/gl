@@ -1,6 +1,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -14,6 +15,8 @@ typedef struct {
     float y;
     float z;
 } Vec3;
+
+typedef float Mat4[4][4];
 
 Vec2  vec2(float x, float y);
 float vec2_length(Vec2 vec);
@@ -35,6 +38,12 @@ Vec3  vec3_div(Vec3 vec, float divisor);
 float vec3_dot(Vec3 vecOne, Vec3 vecTwo);
 Vec3  vec3_cross(Vec3 vecOne, Vec3 vecTwo);
 void  vec3_log(Vec3 vec);
+
+Mat4* mat4(float diagonalValue);
+Mat4* mat4_scale(Mat4* mat, float scalar);
+Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo);
+Mat4* mat4_multiply_many(int count, ...);
+void  mat4_log(Mat4* mat);
 
 typedef GLuint Shader;
 typedef GLuint VAO;
@@ -144,6 +153,23 @@ int main()
     Vec3 vecTwo = vec3(3.f, 10.f, 5.f);
     vec3_log(vec3_cross(vecOne, vecTwo));
 
+    Mat4 matOne =
+    {
+        {1.f, 3.f, 4.f, 2.f},
+        {0.f, 0.f, 7.f, 8.f},
+        {2.f, 2.f, 1.f, 1.f},
+        {3.f, 4.f, -5.f, -3.f},
+    };
+    Mat4 matTwo =
+    {
+        {3.f, 2.f, 1.f, 0.f},
+        {-1.f, 5.f, 3.f, 3.f},
+        {7.f, 3.f, 2.f, 4.f},
+        {8.f, 6.f, 3.f, 3.f},
+    };
+    Mat4* result = mat4_multiply_many(2, &matOne, &matTwo);
+    mat4_log(result);
+
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
 
     VAO VAO = vao_create();
@@ -155,7 +181,7 @@ int main()
     ebo_bind(EBO);
 
     vao_linkAttrib(VBO, 0, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void*)(0));
-    vao_linkAttrib(VBO, 1, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void*)(3 * sizeof(GLuint)));
+    vao_linkAttrib(VBO, 1, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
 
     vao_unbind(VAO);
     vbo_unbind(VBO);
@@ -369,6 +395,93 @@ Vec3 vec3_cross(Vec3 vecOne, Vec3 vecTwo)
 void vec3_log(Vec3 vec)
 {
     printf("X: %.2f; Y: %.2f; Z: %.2f\n", vec.x, vec.y, vec.z);
+}
+
+// Mat4
+
+Mat4* mat4(float diagonalValue)
+{
+    Mat4* mat = malloc(sizeof(Mat4));
+    if (mat == NULL)
+    {
+        return NULL;
+    }
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            (*mat)[i][j] = (i == j) ? diagonalValue : 0.f;
+    return mat;
+}
+
+void mat4_log(Mat4* mat)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            printf("%.2f ", (*mat)[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+Mat4* mat4_scale(Mat4* mat, float scalar)
+{
+    Mat4* result = malloc(sizeof(Mat4));
+    if (result == NULL)
+    {
+        return NULL;
+    }
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            (*result)[i][j] = (*mat)[i][j] * scalar;
+    return result;
+}
+
+Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo)
+{
+    Mat4* result = mat4(0.f);
+    if (result == NULL)
+    {
+        return NULL;
+    }
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            for (int k = 0; k < 4; k++)
+                (*result)[i][j] += (*matOne)[i][k] * (*matTwo)[k][j];
+    return result;
+}
+
+Mat4* mat4_multiply_many(int count, ...)
+{
+    if (count < 1)
+        return NULL;
+
+    va_list args;
+    va_start(args, count);
+
+    Mat4* result = mat4(1.f);
+    Mat4* first = va_arg(args, Mat4*);
+
+    if (result == NULL || first == NULL)
+    {
+        va_end(args);
+        return NULL;
+    }
+
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            (*result)[i][j] = (*first)[i][j];
+
+    for (int i = 1; i < count; i++)
+    {
+        Mat4* next = va_arg(args, Mat4*);
+        Mat4* temp = mat4_multiply(result, next);
+        free(result);
+        result = temp;
+    }
+
+    va_end(args);
+    return result;
 }
 
 // GL
