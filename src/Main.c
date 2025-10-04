@@ -9,6 +9,12 @@ typedef struct {
     float y;
 } Vec2;
 
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Vec3;
+
 Vec2  vec2(float x, float y);
 float vec2_length(Vec2 vec);
 Vec2  vec2_normalize(Vec2 vec);
@@ -18,6 +24,17 @@ Vec2  vec2_scale(Vec2 vec, float scalar);
 Vec2  vec2_div(Vec2 vec, float divisor);
 float vec2_dot(Vec2 vecOne, Vec2 vecTwo);
 void  vec2_log(Vec2 vec);
+
+Vec3  vec3(float x, float y, float z);
+float vec3_length(Vec3 vec);
+Vec3  vec3_normalize(Vec3 vec);
+Vec3  vec3_add(Vec3 vecOne, Vec3 vecTwo);
+Vec3  vec3_sub(Vec3 vecOne, Vec3 vecTwo);
+Vec3  vec3_scale(Vec3 vec, float scalar);
+Vec3  vec3_div(Vec3 vec, float divisor);
+float vec3_dot(Vec3 vecOne, Vec3 vecTwo);
+Vec3  vec3_cross(Vec3 vecOne, Vec3 vecTwo);
+void  vec3_log(Vec3 vec);
 
 typedef GLuint Shader;
 typedef GLuint VAO;
@@ -123,9 +140,9 @@ int main()
         return EXIT_FAILURE;
     }
 
-    Vec2 vecOne = vec2(4.f, 3.f);
-    Vec2 vecTwo = vec2(1.f, 1.f);
-    printf("%.2f\n", vec2_dot(vec2_normalize(vecOne), vecTwo));
+    Vec3 vecOne = vec3(4.f, 3.f, 7.f);
+    Vec3 vecTwo = vec3(3.f, 10.f, 5.f);
+    vec3_log(vec3_cross(vecOne, vecTwo));
 
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
 
@@ -251,6 +268,110 @@ void vec2_log(Vec2 vec)
 {
     printf("X: %.2f; Y: %.2f\n", vec.x, vec.y);
 }
+
+// Vec3
+
+Vec3 vec3(float x, float y, float z)
+{
+    Vec3 vec =
+    {
+        .x = x,
+        .y = y,
+        .z = z,
+    };
+    return vec;
+}
+
+float vec3_length(Vec3 vec)
+{
+    return (float)(sqrt(pow(vec.x, 2) + pow(vec.y, 2) + pow(vec.z, 2)));
+}
+
+Vec3 vec3_normalize(Vec3 vec)
+{
+    float length = vec3_length(vec);
+    if (length == 0.f)
+    {
+        return vec3(0.f, 0.f, 0.f);
+    }
+    Vec3 normalizedVec =
+    {
+        .x = vec.x / length,
+        .y = vec.y / length,
+        .z = vec.z / length,
+    };
+    return normalizedVec;
+}
+
+Vec3 vec3_add(Vec3 vecOne, Vec3 vecTwo)
+{
+    Vec3 result =
+    {
+        .x = vecOne.x + vecTwo.x,
+        .y = vecOne.y + vecTwo.y,
+        .z = vecOne.z + vecTwo.z,
+    };
+    return result;
+}
+
+Vec3 vec3_sub(Vec3 vecOne, Vec3 vecTwo)
+{
+    Vec3 result =
+    {
+        .x = vecOne.x - vecTwo.x,
+        .y = vecOne.y - vecTwo.y,
+        .z = vecOne.z - vecTwo.z,
+    };
+    return result;
+}
+
+Vec3 vec3_scale(Vec3 vec, float scalar)
+{
+    Vec3 result =
+    {
+        .x = vec.x * scalar,
+        .y = vec.y * scalar,
+        .z = vec.z * scalar,
+    };
+    return result;
+}
+
+Vec3 vec3_div(Vec3 vec, float divisor)
+{
+    if (divisor == 0.f)
+    {
+        return vec3(0.f, 0.f, 0.f);
+    }
+    Vec3 result =
+    {
+        .x = vec.x / divisor,
+        .y = vec.y / divisor,
+        .z = vec.z / divisor,
+    };
+    return result;
+}
+
+float vec3_dot(Vec3 vecOne, Vec3 vecTwo)
+{
+    return vecOne.x * vecTwo.x + vecOne.y * vecTwo.y + vecOne.z * vecTwo.z;
+}
+
+Vec3 vec3_cross(Vec3 vecOne, Vec3 vecTwo)
+{
+    Vec3 result =vec3(
+        (vecOne.y * vecTwo.z) - (vecOne.z * vecTwo.y),
+        (vecOne.z * vecTwo.x) - (vecOne.x * vecTwo.z),
+        (vecOne.x * vecTwo.y) - (vecOne.y * vecTwo.x)
+    );
+    return result;
+}
+
+void vec3_log(Vec3 vec)
+{
+    printf("X: %.2f; Y: %.2f; Z: %.2f\n", vec.x, vec.y, vec.z);
+}
+
+// GL
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
