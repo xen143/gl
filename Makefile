@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
-LIBS = -lGL -lGLEW -lglfw
+LIBS = -lGL -lGLEW -lglfw -lm
 
 SRC_DIR = src
 OBJ_DIR = build/obj

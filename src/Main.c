@@ -5,6 +5,10 @@
 #include <math.h>
 #include <stdio.h>
 
+const float PI = 3.141593f;
+float radians(float degrees);
+float degrees(float radians);
+
 typedef struct {
     float x;
     float y;
@@ -44,6 +48,7 @@ Mat4* mat4_scale(Mat4* mat, float scalar);
 Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo);
 Mat4* mat4_multiply_many(int count, ...);
 Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar);
+Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar);
 void  mat4_log(Mat4* mat);
 
 typedef GLuint Shader;
@@ -99,10 +104,10 @@ const char* fragmentShaderSource =
 
 const GLfloat vertices[] =
 {
-    -32.f, -32.f, 0.f, 1.f, 1.f, 1.f,
-     32.f, -32.f, 0.f, 1.f, 1.f, 1.f,
-    -32.f,  32.f, 0.f, 1.f, 1.f, 1.f,
-     32.f,  32.f, 0.f, 1.f, 1.f, 1.f,
+    -0.5f, -0.5f, -1.f, 1.f, 1.f, 1.f,
+     0.5f, -0.5f, -1.f, 1.f, 1.f, 1.f,
+    -0.5f,  0.5f, -1.f, 1.f, 1.f, 1.f,
+     0.5f,  0.5f, -1.f, 1.f, 1.f, 1.f,
 };
 const GLuint indices[] =
 {
@@ -174,7 +179,7 @@ int main()
         GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
         Mat4* model = mat4(1.f);
         Mat4* view = mat4(1.f);
-        Mat4* projection = mat4_ortho(0, WINDOW_WIDTH, WINDOW_HEIGHT, 0, -1.f, 1.f);
+        Mat4* projection = mat4_perspective(60.f, (float)WINDOW_WIDTH / WINDOW_HEIGHT, 0.01f, 100.f);
         Mat4* mvp = mat4_multiply_many(3, projection, view, model);
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(*mvp));
 
@@ -199,6 +204,18 @@ int main()
     glfwDestroyWindow(window);
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+
+// Math
+
+float radians(float degrees)
+{
+    return degrees * PI / 180.f;
+}
+
+float degrees(float radians)
+{
+    return radians * 180.f / PI;
 }
 
 // Vec2
@@ -485,6 +502,18 @@ Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, 
     (*result)[3][0] = -(right + left) / (right - left);
     (*result)[3][1] = -(top + bottom) / (top - bottom);
     (*result)[3][2] = -(zFar + zNear) / (zFar - zNear);
+    return result;
+}
+
+Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar)
+{
+    Mat4* result = mat4(0.f);
+    float halfTanFov = tanf(radians(fov)) / 2.f;
+    (*result)[0][0] = 1.f / (halfTanFov * aspect);
+    (*result)[1][1] = 1.f / halfTanFov;
+    (*result)[2][2] = (zFar + zNear) / (zNear - zFar);
+    (*result)[2][3] = -1.f;
+    (*result)[3][2] = (-2.f * zNear * zFar) / (zFar - zNear);
     return result;
 }
 
