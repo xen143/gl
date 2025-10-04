@@ -43,6 +43,7 @@ Mat4* mat4(float diagonalValue);
 Mat4* mat4_scale(Mat4* mat, float scalar);
 Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo);
 Mat4* mat4_multiply_many(int count, ...);
+Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar);
 void  mat4_log(Mat4* mat);
 
 typedef GLuint Shader;
@@ -81,10 +82,11 @@ const char* vertexShaderSource =
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec3 aCol;\n"
     "out vec3 vertCol;\n"
+    "uniform mat4 mvp;\n"
     "void main()\n"
     "{\n"
     "  vertCol = aCol;\n"
-    "  gl_Position = vec4(aPos, 1.f);\n"
+    "  gl_Position = mvp * vec4(aPos, 1.f);\n"
     "}\0";
 const char* fragmentShaderSource =
     "#version 330 core\n"
@@ -97,18 +99,15 @@ const char* fragmentShaderSource =
 
 const GLfloat vertices[] =
 {
-    -0.5f,  -0.5f, 0.f, 1.f, 0.f, 0.f,
-     0.0f,  -0.5f, 0.f, 0.f, 1.f, 0.f,
-     0.5f,  -0.5f, 0.f, 0.f, 0.f, 1.f,
-    -0.25f,  0.f,  0.f, 1.f, 1.f, 0.f,
-     0.25f,  0.f,  0.f, 1.f, 0.f, 1.f,
-     0.0f,   0.5f, 0.f, 0.f, 1.f, 1.f,
+    -32.f, -32.f, 0.f, 1.f, 1.f, 1.f,
+     32.f, -32.f, 0.f, 1.f, 1.f, 1.f,
+    -32.f,  32.f, 0.f, 1.f, 1.f, 1.f,
+     32.f,  32.f, 0.f, 1.f, 1.f, 1.f,
 };
 const GLuint indices[] =
 {
     0, 1, 3,
-    1, 2, 4,
-    3, 4, 5,
+    0, 3, 2,
 };
 
 int main()
@@ -149,27 +148,6 @@ int main()
         return EXIT_FAILURE;
     }
 
-    Vec3 vecOne = vec3(4.f, 3.f, 7.f);
-    Vec3 vecTwo = vec3(3.f, 10.f, 5.f);
-    vec3_log(vec3_cross(vecOne, vecTwo));
-
-    Mat4 matOne =
-    {
-        {1.f, 3.f, 4.f, 2.f},
-        {0.f, 0.f, 7.f, 8.f},
-        {2.f, 2.f, 1.f, 1.f},
-        {3.f, 4.f, -5.f, -3.f},
-    };
-    Mat4 matTwo =
-    {
-        {3.f, 2.f, 1.f, 0.f},
-        {-1.f, 5.f, 3.f, 3.f},
-        {7.f, 3.f, 2.f, 4.f},
-        {8.f, 6.f, 3.f, 3.f},
-    };
-    Mat4* result = mat4_multiply_many(2, &matOne, &matTwo);
-    mat4_log(result);
-
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
 
     VAO VAO = vao_create();
@@ -192,9 +170,23 @@ int main()
     {
         shader_use(shader);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
+        Mat4* model = mat4(1.f);
+        Mat4* view = mat4(1.f);
+        Mat4* projection = mat4_ortho(0, WINDOW_WIDTH, WINDOW_HEIGHT, 0, -1.f, 1.f);
+        Mat4* mvp = mat4_multiply_many(3, projection, view, model);
+        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(*mvp));
+
         vao_bind(VAO);
         glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, NULL);
         vao_unbind(VAO);
+
+        free(model);
+        free(view);
+        free(projection);
+        free(mvp);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -481,6 +473,18 @@ Mat4* mat4_multiply_many(int count, ...)
     }
 
     va_end(args);
+    return result;
+}
+
+Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar)
+{
+    Mat4* result = mat4(1.f);
+    (*result)[0][0] =  2.f / (right - left);
+    (*result)[1][1] =  2.f / (top - bottom);
+    (*result)[2][2] = -2.f / (zFar - zNear);
+    (*result)[3][0] = -(right + left) / (right - left);
+    (*result)[3][1] = -(top + bottom) / (top - bottom);
+    (*result)[3][2] = -(zFar + zNear) / (zFar - zNear);
     return result;
 }
 
