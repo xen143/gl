@@ -44,9 +44,15 @@ Vec3  vec3_cross(Vec3 vecOne, Vec3 vecTwo);
 void  vec3_log(Vec3 vec);
 
 Mat4* mat4(float diagonalValue);
+void  mat4_copy(Mat4* source, Mat4* target);
 Mat4* mat4_scale(Mat4* mat, float scalar);
 Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo);
+void  mat4_multiply_inplace(Mat4* matOne, Mat4* matTwo);
 Mat4* mat4_multiply_many(int count, ...);
+Mat4* mat4_translate(Mat4* mat, Vec3 vec);
+void  mat4_translate_inplace(Mat4* mat, Vec3 vec);
+Mat4* mat4_rotate(Mat4* mat, float degrees, Vec3 rotationVec);
+void  mat4_rotate_inplace(Mat4* mat, float degrees, Vec3 rotationVec);
 Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar);
 Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar);
 void  mat4_log(Mat4* mat);
@@ -104,15 +110,29 @@ const char* fragmentShaderSource =
 
 const GLfloat vertices[] =
 {
-    -0.5f, -0.5f, -1.f, 1.f, 1.f, 1.f,
-     0.5f, -0.5f, -1.f, 1.f, 1.f, 1.f,
-    -0.5f,  0.5f, -1.f, 1.f, 1.f, 1.f,
-     0.5f,  0.5f, -1.f, 1.f, 1.f, 1.f,
+    -0.5f, -0.5f,  0.5f, 1.f, 0.f, 0.f,
+     0.5f, -0.5f,  0.5f, 0.f, 1.f, 0.f,
+    -0.5f,  0.5f,  0.5f, 0.f, 0.f, 1.f,
+     0.5f,  0.5f,  0.5f, 1.f, 1.f, 0.f,
+    -0.5f, -0.5f, -0.5f, 1.f, 0.f, 1.f,
+     0.5f, -0.5f, -0.5f, 0.f, 1.f, 1.f,
+    -0.5f,  0.5f, -0.5f, 1.f, 0.f, 0.f,
+     0.5f,  0.5f, -0.5f, 0.f, 1.f, 0.f,
 };
 const GLuint indices[] =
 {
-    0, 1, 3,
-    0, 3, 2,
+    0, 1, 3, // Front
+    0, 3, 2, // Front
+    1, 5, 7, // Right
+    1, 7, 3, // Right
+    5, 4, 6, // Back
+    5, 6, 7, // Back
+    4, 0, 2, // Left
+    4, 2, 6, // Left
+    2, 3, 7, // Top
+    2, 7, 6, // Top
+    5, 4, 0, // Bottom
+    5, 0, 1, // Bottom
 };
 
 int main()
@@ -153,6 +173,9 @@ int main()
         return EXIT_FAILURE;
     }
 
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.f, 0.5f, 0.5f, 1.f);
+
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
 
     VAO VAO = vao_create();
@@ -170,17 +193,25 @@ int main()
     vbo_unbind(VBO);
     ebo_unbind(EBO);
 
-    glClearColor(0.f, 0.5f, 0.5f, 1.f);
+    float lastTime = 0.f;
+    float deltaTime = 0.f;
+    float rotation = 0.f;
+
     while (!glfwWindowShouldClose(window))
     {
         shader_use(shader);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        deltaTime = glfwGetTime() - lastTime;
+        rotation += 25.f * deltaTime;
 
         GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
         Mat4* model = mat4(1.f);
+        mat4_rotate_inplace(model, rotation, vec3(1.f, 1.f, 1.f));
         Mat4* view = mat4(1.f);
+        mat4_translate_inplace(view, vec3(0.0f, 0.f, -3.0f));
         Mat4* projection = mat4_perspective(60.f, (float)WINDOW_WIDTH / WINDOW_HEIGHT, 0.01f, 100.f);
-        Mat4* mvp = mat4_multiply_many(3, projection, view, model);
+        Mat4* mvp = mat4_multiply_many(3, model, view, projection);
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(*mvp));
 
         vao_bind(VAO);
@@ -192,6 +223,7 @@ int main()
         free(projection);
         free(mvp);
 
+        lastTime = glfwGetTime();
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -421,6 +453,13 @@ Mat4* mat4(float diagonalValue)
     return mat;
 }
 
+void mat4_copy(Mat4* source, Mat4* target)
+{
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            (*target)[i][j] = (*source)[i][j];
+}
+
 void mat4_log(Mat4* mat)
 {
     for (int i = 0; i < 4; i++)
@@ -460,6 +499,17 @@ Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo)
     return result;
 }
 
+void mat4_multiply_inplace(Mat4* matOne, Mat4* matTwo)
+{
+    Mat4* temp = mat4(0.f);
+    for (int i = 0; i < 4; i++)
+        for (int j = 0; j < 4; j++)
+            for (int k = 0; k < 4; k++)
+                (*temp)[i][j] += (*matOne)[i][k] * (*matTwo)[k][j];
+    mat4_copy(temp, matOne);
+    free(temp);
+}
+
 Mat4* mat4_multiply_many(int count, ...)
 {
     if (count < 1)
@@ -477,9 +527,7 @@ Mat4* mat4_multiply_many(int count, ...)
         return NULL;
     }
 
-    for (int i = 0; i < 4; i++)
-        for (int j = 0; j < 4; j++)
-            (*result)[i][j] = (*first)[i][j];
+    mat4_copy(first, result);
 
     for (int i = 1; i < count; i++)
     {
@@ -491,6 +539,76 @@ Mat4* mat4_multiply_many(int count, ...)
 
     va_end(args);
     return result;
+}
+
+Mat4* mat4_translate(Mat4* mat, Vec3 vec)
+{
+    Mat4* result = malloc(sizeof(Mat4));
+    if (result == NULL)
+    {
+        return NULL;
+    }
+    mat4_copy(mat, result);
+    (*result)[3][0] += vec.x;
+    (*result)[3][1] += vec.y;
+    (*result)[3][2] += vec.z;
+    return result;
+}
+
+void mat4_translate_inplace(Mat4* mat, Vec3 vec)
+{
+    (*mat)[3][0] += vec.x;
+    (*mat)[3][1] += vec.y;
+    (*mat)[3][2] += vec.z;
+}
+
+Mat4* mat4_rotate(Mat4* mat, float degrees, Vec3 rotationVec)
+{
+    Mat4* result = mat4(0.f);
+    Vec3 normalizedRotationVec = vec3_normalize(rotationVec);
+    mat4_copy(mat, result);
+
+    const float sinTheta = sinf(radians(degrees));
+    const float cosTheta = cosf(radians(degrees));
+    const float oneMinusCosTheta = 1.f - cosTheta;
+
+    (*result)[0][0] = cosTheta + normalizedRotationVec.x * normalizedRotationVec.x * oneMinusCosTheta;
+    (*result)[0][1] = normalizedRotationVec.x * normalizedRotationVec.y * oneMinusCosTheta - normalizedRotationVec.z * sinTheta;
+    (*result)[0][2] = normalizedRotationVec.x * normalizedRotationVec.z * oneMinusCosTheta + normalizedRotationVec.y * sinTheta;
+    (*result)[1][0] = normalizedRotationVec.y * normalizedRotationVec.x * oneMinusCosTheta + normalizedRotationVec.z * sinTheta;
+    (*result)[1][1] = cosTheta + normalizedRotationVec.y * normalizedRotationVec.y * oneMinusCosTheta;
+    (*result)[1][2] = normalizedRotationVec.y * normalizedRotationVec.z * oneMinusCosTheta - normalizedRotationVec.x * sinTheta;
+    (*result)[2][0] = normalizedRotationVec.z * normalizedRotationVec.x * oneMinusCosTheta - normalizedRotationVec.y * sinTheta;
+    (*result)[2][1] = normalizedRotationVec.z * normalizedRotationVec.y * oneMinusCosTheta + normalizedRotationVec.x * sinTheta;
+    (*result)[2][2] = cosTheta + normalizedRotationVec.z * normalizedRotationVec.z * oneMinusCosTheta;
+
+
+    mat4_multiply_inplace(result, mat);
+    return result;
+}
+
+void mat4_rotate_inplace(Mat4* mat, float degrees, Vec3 rotationVec)
+{
+    Mat4* rotationMat = mat4(0.f);
+    Vec3 normalizedRotationVec = vec3_normalize(rotationVec);
+    mat4_copy(mat, rotationMat);
+
+    const float sinTheta = sinf(radians(degrees));
+    const float cosTheta = cosf(radians(degrees));
+    const float oneMinusCosTheta = 1.f - cosTheta;
+
+    (*rotationMat)[0][0] = cosTheta + normalizedRotationVec.x * normalizedRotationVec.x * oneMinusCosTheta;
+    (*rotationMat)[0][1] = normalizedRotationVec.x * normalizedRotationVec.y * oneMinusCosTheta - normalizedRotationVec.z * sinTheta;
+    (*rotationMat)[0][2] = normalizedRotationVec.x * normalizedRotationVec.z * oneMinusCosTheta + normalizedRotationVec.y * sinTheta;
+    (*rotationMat)[1][0] = normalizedRotationVec.y * normalizedRotationVec.x * oneMinusCosTheta + normalizedRotationVec.z * sinTheta;
+    (*rotationMat)[1][1] = cosTheta + normalizedRotationVec.y * normalizedRotationVec.y * oneMinusCosTheta;
+    (*rotationMat)[1][2] = normalizedRotationVec.y * normalizedRotationVec.z * oneMinusCosTheta - normalizedRotationVec.x * sinTheta;
+    (*rotationMat)[2][0] = normalizedRotationVec.z * normalizedRotationVec.x * oneMinusCosTheta - normalizedRotationVec.y * sinTheta;
+    (*rotationMat)[2][1] = normalizedRotationVec.z * normalizedRotationVec.y * oneMinusCosTheta + normalizedRotationVec.x * sinTheta;
+    (*rotationMat)[2][2] = cosTheta + normalizedRotationVec.z * normalizedRotationVec.z * oneMinusCosTheta;
+
+
+    mat4_multiply_inplace(mat, rotationMat);
 }
 
 Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar)
@@ -508,12 +626,12 @@ Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, 
 Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar)
 {
     Mat4* result = mat4(0.f);
-    float halfTanFov = tanf(radians(fov)) / 2.f;
+    float halfTanFov = tanf(radians(fov) / 2.f);
     (*result)[0][0] = 1.f / (halfTanFov * aspect);
     (*result)[1][1] = 1.f / halfTanFov;
     (*result)[2][2] = (zFar + zNear) / (zNear - zFar);
     (*result)[2][3] = -1.f;
-    (*result)[3][2] = (-2.f * zNear * zFar) / (zFar - zNear);
+    (*result)[3][2] = -(2.f * zNear * zFar) / (zFar - zNear);
     return result;
 }
 
