@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 const float PI = 3.141593f;
@@ -55,6 +56,7 @@ Mat4* mat4_rotate(Mat4* mat, float degrees, Vec3 rotationVec);
 void  mat4_rotate_inplace(Mat4* mat, float degrees, Vec3 rotationVec);
 Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar);
 Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar);
+Mat4* mat4_lookAt(Vec3 eye, Vec3 target, Vec3 up);
 void  mat4_log(Mat4* mat);
 
 typedef GLuint Shader;
@@ -84,9 +86,33 @@ void ebo_bind(EBO EBO);
 void ebo_unbind(EBO EBO);
 void ebo_delete(EBO* EBO);
 
-const unsigned int WINDOW_WIDTH  = 400;
-const unsigned int WINDOW_HEIGHT = 300;
+typedef struct
+{
+    Vec3 position;
+    Vec3 front;
+    float yaw;
+    float pitch;
+    float fov;
+    float speed;
+    float sensitivity;
+    float aspectRatio;
+    bool locked;
+} Camera;
+
+Camera camera_create(float fov, float speed, float sensitivity, float aspectRatio);
+void   camera_recomputeRotation(Camera* camera, GLFWwindow* window);
+void   camera_updateAspectRatio(Camera* camera, float aspectRatio);
+
+Vec3 window_getMovementVec(GLFWwindow* window);
+
+const unsigned int WINDOW_WIDTH  = 800;
+const unsigned int WINDOW_HEIGHT = 600;
 const char*        WINDOW_TITLE  = "GL";
+
+const float CAMERA_FOV            = 60.f;
+const float CAMERA_INITIAL_ASPECT = (float)WINDOW_WIDTH / WINDOW_HEIGHT;
+const float CAMERA_SPEED          = 10.f;
+const float CAMERA_SENSITIVITY    = 0.3f;
 
 const char* vertexShaderSource =
     "#version 330 core\n"
@@ -134,6 +160,9 @@ const GLuint indices[] =
     5, 4, 0, // Bottom
     5, 0, 1, // Bottom
 };
+
+int currentWindowWidth  = WINDOW_WIDTH;
+int currentWindowHeight = WINDOW_HEIGHT;
 
 int main()
 {
@@ -193,9 +222,16 @@ int main()
     vbo_unbind(VBO);
     ebo_unbind(EBO);
 
+    bool lockPressed = false;
     float lastTime = 0.f;
     float deltaTime = 0.f;
-    float rotation = 0.f;
+
+    Camera camera = camera_create(
+        CAMERA_FOV,
+        CAMERA_SPEED,
+        CAMERA_SENSITIVITY,
+        CAMERA_INITIAL_ASPECT
+    );
 
     while (!glfwWindowShouldClose(window))
     {
@@ -203,15 +239,61 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         deltaTime = glfwGetTime() - lastTime;
-        rotation += 25.f * deltaTime;
 
-        GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+        {
+            if (!lockPressed)
+            {
+                camera.locked = !camera.locked;
+                lockPressed = true;
+                glfwSetInputMode(
+                    window,
+                    GLFW_CURSOR,
+                    camera.locked ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL
+                );
+            }
+        } else {
+            lockPressed = false;
+        }
+
+        Vec3 front = vec3(0.f, 0.f, 0.f);
+        front.x = cosf(radians(camera.yaw)) * cosf(radians(camera.pitch));
+        front.y = sinf(radians(camera.pitch));
+        front.z = sinf(radians(camera.yaw)) * cosf(radians(camera.pitch));
+        camera.front = vec3_normalize(front);
+
+        if (camera.locked)
+        {
+            Vec3 movementVec = vec3_normalize(window_getMovementVec(window));
+            Vec3 movementDirection = vec3(0.f, 0.f, 0.f);
+            Vec3 right = vec3_normalize(vec3_cross(camera.front, vec3(0.f, 1.f, 0.f)));
+            
+            movementDirection = vec3_add(movementDirection, vec3_scale(camera.front, movementVec.z));
+            movementDirection = vec3_add(movementDirection, vec3_scale(right, movementVec.x));
+            movementDirection = vec3_add(movementDirection, vec3_scale(vec3(0, 1.f, 0.f), movementVec.y));
+            
+            movementDirection = vec3_normalize(movementDirection);
+            camera.position = vec3_add(camera.position, vec3_scale(movementDirection, CAMERA_SPEED * deltaTime));
+            
+            camera_recomputeRotation(&camera, window);
+            glfwSetCursorPos(window, (double)currentWindowWidth / 2.f, (double)currentWindowHeight / 2.f);
+        }
+
         Mat4* model = mat4(1.f);
-        mat4_rotate_inplace(model, rotation, vec3(1.f, 1.f, 1.f));
-        Mat4* view = mat4(1.f);
-        mat4_translate_inplace(view, vec3(0.0f, 0.f, -3.0f));
-        Mat4* projection = mat4_perspective(60.f, (float)WINDOW_WIDTH / WINDOW_HEIGHT, 0.01f, 100.f);
-        Mat4* mvp = mat4_multiply_many(3, model, view, projection);
+        Mat4* view = mat4_lookAt(
+            camera.position,
+            vec3_add(camera.position, front),
+            vec3(0.f, 1.f, 0.f)
+        );
+        Mat4* projection = mat4_perspective(
+            60.f,
+            (float)currentWindowWidth / currentWindowHeight,
+            0.01f, 
+            100.f
+        );
+
+        Mat4* mvp = mat4_multiply_many(3, view, model, projection);
+        GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(*mvp));
 
         vao_bind(VAO);
@@ -222,6 +304,12 @@ int main()
         free(view);
         free(projection);
         free(mvp);
+
+        glfwSetInputMode(
+            window,
+            GLFW_CURSOR,
+            camera.locked ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_NORMAL
+        );
 
         lastTime = glfwGetTime();
         glfwSwapBuffers(window);
@@ -236,6 +324,38 @@ int main()
     glfwDestroyWindow(window);
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+
+// Main Logic
+
+Vec3 window_getMovementVec(GLFWwindow* window)
+{
+    Vec3 movementVec = vec3(0.f, 0.f, 0.f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        movementVec.z += 1;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        movementVec.z -= 1;
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        movementVec.x -= 1;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        movementVec.x += 1;
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+    {
+        movementVec.y -= 1;
+    }
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        movementVec.y += 1;
+    }
+    return movementVec;
 }
 
 // Math
@@ -635,11 +755,37 @@ Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar)
     return result;
 }
 
+Mat4* mat4_lookAt(Vec3 eye, Vec3 target, Vec3 up)
+{
+    Vec3 front = vec3_normalize(vec3_sub(eye, target));
+    Vec3 right = vec3_normalize(vec3_cross(up, front));
+    Vec3 newUp = vec3_cross(front, right);
+    Mat4* result = mat4(0.f);
+
+    (*result)[0][0] = right.x;
+    (*result)[1][0] = right.y;
+    (*result)[2][0] = right.z;
+    (*result)[0][1] = newUp.x;
+    (*result)[1][1] = newUp.y;
+    (*result)[2][1] = newUp.z;
+    (*result)[0][2] = front.x;
+    (*result)[1][2] = front.y;
+    (*result)[2][2] = front.z;
+    (*result)[3][0] = -vec3_dot(right, eye);
+    (*result)[3][1] = -vec3_dot(newUp, eye);
+    (*result)[3][2] = -vec3_dot(front, eye);
+    (*result)[3][3] = 1.f;
+
+    return result;
+}
+
 // GL
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
     (void)window;
+    currentWindowWidth = width;
+    currentWindowHeight = height;
     glViewport(0, 0, width, height);
 }
 
@@ -789,4 +935,55 @@ void ebo_unbind(EBO EBO)
 void ebo_delete(EBO* EBO)
 {
     glDeleteBuffers(1, EBO);
+}
+
+// Camera
+
+Camera camera_create(float fov, float speed, float sensitivity, float aspectRatio)
+{
+    Camera camera =
+    {
+        .position = vec3(0.f, 0.f, 0.f),
+        .front = vec3(0.f, 0.f, -1.f),
+        .yaw = -90.f,
+        .pitch = 0.f,
+        .fov = fov,
+        .speed = speed,
+        .sensitivity = sensitivity,
+        .aspectRatio = aspectRatio,
+        .locked = false,
+    };
+    return camera;
+}
+
+void camera_recomputeRotation(Camera* camera, GLFWwindow* window)
+{
+    double mouseX;
+    double mouseY;
+    glfwGetCursorPos(window, &mouseX, &mouseY);
+
+    int windowWidth;
+    int windowHeight;
+    glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+
+    const float deltaX = (float)(mouseX - (float)windowWidth / 2.f) * CAMERA_SENSITIVITY;
+    const float deltaY = (float)(mouseY - (float)windowHeight / 2.f) * CAMERA_SENSITIVITY;
+
+    camera->yaw += deltaX * camera->sensitivity;
+    camera->pitch -= deltaY * camera->sensitivity;
+
+    if (camera->pitch > 89.f)
+    {
+        camera->pitch = 89.f;
+    }
+    else if (camera->pitch < -89.f)
+    {
+        camera->pitch = -89.f;
+    }
+    camera->yaw = fmod(camera->yaw, 360.f);
+}
+
+void camera_updateAspectRatio(Camera* camera, float aspectRatio)
+{
+    camera->aspectRatio = aspectRatio;
 }
