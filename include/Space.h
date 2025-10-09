@@ -62,13 +62,17 @@ Mat4* mat4_scale(Mat4* mat, float scalar);
 Mat4* mat4_multiply(Mat4* matOne, Mat4* matTwo);
 void  mat4_multiply_inplace(Mat4* matOne, Mat4* matTwo);
 Mat4* mat4_multiply_many(int count, ...);
+void  mat4_multiply_many_inplace(Mat4* mat, int count, ...);
 Mat4* mat4_translate(Mat4* mat, Vec3 vec);
 void  mat4_translate_inplace(Mat4* mat, Vec3 vec);
 Mat4* mat4_rotate(Mat4* mat, float degrees, Vec3 rotationVec);
 void  mat4_rotate_inplace(Mat4* mat, float degrees, Vec3 rotationVec);
 Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar);
+void  mat4_ortho_inplace(Mat4* mat, float left, float right, float bottom, float top, float zNear, float zFar);
 Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar);
+void  mat4_perspective_inplace(Mat4* mat, float fov, float aspect, float zNear, float zFar);
 Mat4* mat4_lookAt(Vec3 eye, Vec3 target, Vec3 up);
+void  mat4_lookAt_inplace(Mat4* mat, Vec3 eye, Vec3 target, Vec3 up);
 void  mat4_log(Mat4* mat);
 
 #endif // SPACE_H

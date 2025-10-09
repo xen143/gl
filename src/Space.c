@@ -393,6 +393,40 @@ Mat4* mat4_multiply_many(int count, ...)
     return result;
 }
 
+void mat4_multiply_many_inplace(Mat4* mat, int count, ...)
+{
+    if (count < 1 || mat == NULL)
+        return;
+
+    va_list args;
+    va_start(args, count);
+
+    Mat4* matrices[count];
+    for (int i = 0; i < count; i++)
+    {
+        matrices[i] = va_arg(args, Mat4*);
+    }
+
+    Mat4 tempResult;
+    mat4_copy(matrices[count - 1], &tempResult);
+
+    for (int i = count - 2; i >= 0; i--)
+    {
+        if (matrices[i] != NULL)
+        {
+            Mat4* newResult = mat4_multiply(matrices[i], &tempResult);
+            if (newResult != NULL)
+            {
+                mat4_copy(newResult, &tempResult);
+                free(newResult);
+            }
+        }
+    }
+
+    mat4_copy(&tempResult, mat);
+    va_end(args);
+}
+
 Mat4* mat4_translate(Mat4* mat, Vec3 vec)
 {
     Mat4* result = malloc(sizeof(Mat4));
@@ -434,7 +468,6 @@ Mat4* mat4_rotate(Mat4* mat, float degrees, Vec3 rotationVec)
     (*result)[2][1] = normalizedRotationVec.z * normalizedRotationVec.y * oneMinusCosTheta + normalizedRotationVec.x * sinTheta;
     (*result)[2][2] = cosTheta + normalizedRotationVec.z * normalizedRotationVec.z * oneMinusCosTheta;
 
-
     mat4_multiply_inplace(result, mat);
     return result;
 }
@@ -459,54 +492,71 @@ void mat4_rotate_inplace(Mat4* mat, float degrees, Vec3 rotationVec)
     (*rotationMat)[2][1] = normalizedRotationVec.z * normalizedRotationVec.y * oneMinusCosTheta + normalizedRotationVec.x * sinTheta;
     (*rotationMat)[2][2] = cosTheta + normalizedRotationVec.z * normalizedRotationVec.z * oneMinusCosTheta;
 
-
     mat4_multiply_inplace(mat, rotationMat);
+    free(rotationMat);
 }
 
 Mat4* mat4_ortho(float left, float right, float bottom, float top, float zNear, float zFar)
 {
     Mat4* result = mat4(1.f);
-    (*result)[0][0] =  2.f / (right - left);
-    (*result)[1][1] =  2.f / (top - bottom);
-    (*result)[2][2] = -2.f / (zFar - zNear);
-    (*result)[3][0] = -(right + left) / (right - left);
-    (*result)[3][1] = -(top + bottom) / (top - bottom);
-    (*result)[3][2] = -(zFar + zNear) / (zFar - zNear);
+    mat4_ortho_inplace(result, left, right, bottom, top, zNear, zFar);
     return result;
+}
+
+void mat4_ortho_inplace(Mat4* mat, float left, float right, float bottom, float top, float zNear, float zFar)
+{
+    (*mat)[0][0] =  2.f / (right - left);
+    (*mat)[1][1] =  2.f / (top - bottom);
+    (*mat)[2][2] = -2.f / (zFar - zNear);
+    (*mat)[3][0] = -(right + left) / (right - left);
+    (*mat)[3][1] = -(top + bottom) / (top - bottom);
+    (*mat)[3][2] = -(zFar + zNear) / (zFar - zNear);
+    (*mat)[3][3] = 1.f;
 }
 
 Mat4* mat4_perspective(float fov, float aspect, float zNear, float zFar)
 {
     Mat4* result = mat4(0.f);
-    float halfTanFov = tanf(radians(fov) / 2.f);
-    (*result)[0][0] = 1.f / (halfTanFov * aspect);
-    (*result)[1][1] = 1.f / halfTanFov;
-    (*result)[2][2] = (zFar + zNear) / (zNear - zFar);
-    (*result)[2][3] = -1.f;
-    (*result)[3][2] = -(2.f * zNear * zFar) / (zFar - zNear);
+    mat4_perspective_inplace(result, fov, aspect, zNear, zFar);
     return result;
+}
+
+void mat4_perspective_inplace(Mat4* mat, float fov, float aspect, float zNear, float zFar)
+{
+    float halfTanFov = tanf(radians(fov) / 2.f);
+    (*mat)[0][0] = 1.f / (halfTanFov * aspect);
+    (*mat)[1][1] = 1.f / halfTanFov;
+    (*mat)[2][2] = (zFar + zNear) / (zNear - zFar);
+    (*mat)[2][3] = -1.f;
+    (*mat)[3][2] = -(2.f * zNear * zFar) / (zFar - zNear);
+    (*mat)[3][3] = 0.f;
 }
 
 Mat4* mat4_lookAt(Vec3 eye, Vec3 target, Vec3 up)
 {
+    Mat4* result = mat4(0.f);
+    mat4_lookAt_inplace(result, eye, target, up);
+    return result;
+}
+
+void mat4_lookAt_inplace(Mat4* mat, Vec3 eye, Vec3 target, Vec3 up)
+{
     Vec3 front = vec3_normalize(vec3_sub(eye, target));
     Vec3 right = vec3_normalize(vec3_cross(up, front));
     Vec3 newUp = vec3_cross(front, right);
-    Mat4* result = mat4(0.f);
+    mat4_load_identity(mat);
 
-    (*result)[0][0] = right.x;
-    (*result)[1][0] = right.y;
-    (*result)[2][0] = right.z;
-    (*result)[0][1] = newUp.x;
-    (*result)[1][1] = newUp.y;
-    (*result)[2][1] = newUp.z;
-    (*result)[0][2] = front.x;
-    (*result)[1][2] = front.y;
-    (*result)[2][2] = front.z;
-    (*result)[3][0] = -vec3_dot(right, eye);
-    (*result)[3][1] = -vec3_dot(newUp, eye);
-    (*result)[3][2] = -vec3_dot(front, eye);
-    (*result)[3][3] = 1.f;
-
-    return result;
+    (*mat)[0][0] = right.x;
+    (*mat)[1][0] = right.y;
+    (*mat)[2][0] = right.z;
+    (*mat)[0][1] = newUp.x;
+    (*mat)[1][1] = newUp.y;
+    (*mat)[2][1] = newUp.z;
+    (*mat)[0][2] = front.x;
+    (*mat)[1][2] = front.y;
+    (*mat)[2][2] = front.z;
+    (*mat)[3][0] = -vec3_dot(right, eye);
+    (*mat)[3][1] = -vec3_dot(newUp, eye);
+    (*mat)[3][2] = -vec3_dot(front, eye);
+    (*mat)[3][3] = 1.f;
 }

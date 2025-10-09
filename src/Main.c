@@ -6,34 +6,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "../include/Graphics.h"
 #include "../include/Space.h"
 
-typedef GLuint Shader;
-typedef GLuint VAO;
-typedef GLuint VBO; 
-typedef GLuint EBO;
-
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
-
-Shader shader_create(const char* vertexShaderSource, const char* fragmentShaderSource);
-void   shader_use(Shader ID);
-void   shader_delete(Shader ID);
-
-VAO  vao_create();
-void vao_linkAttrib(VBO VBO, GLuint index, GLuint size, GLenum type, GLsizei stride, const void* offset);
-void vao_bind(VAO VAO);
-void vao_unbind(VAO VAO);
-void vao_delete(VAO* VAO);
-
-VBO  vbo_create(const GLfloat* vertices, GLsizeiptr verticesSize);
-void vbo_bind(VBO VBO);
-void vbo_unbind(VBO VBO);
-void vbo_delete(VBO* VBO);
-
-EBO  ebo_create(const GLuint* indices, GLsizeiptr indicesSize);
-void ebo_bind(EBO EBO);
-void ebo_unbind(EBO EBO);
-void ebo_delete(EBO* EBO);
 
 typedef struct
 {
@@ -61,7 +37,7 @@ const char*        WINDOW_TITLE  = "GL";
 const float CAMERA_FOV            = 60.f;
 const float CAMERA_INITIAL_ASPECT = (float)WINDOW_WIDTH / WINDOW_HEIGHT;
 const float CAMERA_SPEED          = 10.f;
-const float CAMERA_SENSITIVITY    = 0.3f;
+const float CAMERA_SENSITIVITY    = 0.25f;
 
 const char* vertexShaderSource =
     "#version 330 core\n"
@@ -182,6 +158,11 @@ int main()
         CAMERA_INITIAL_ASPECT
     );
 
+    Mat4 model;
+    Mat4 view;
+    Mat4 projection;
+    Mat4 mvp;
+
     while (!glfwWindowShouldClose(window))
     {
         shader_use(shader);
@@ -228,31 +209,21 @@ int main()
             glfwSetCursorPos(window, (double)currentWindowWidth / 2.f, (double)currentWindowHeight / 2.f);
         }
 
-        Mat4* model = mat4(1.f);
-        Mat4* view = mat4_lookAt(
-            camera.position,
-            vec3_add(camera.position, front),
-            vec3(0.f, 1.f, 0.f)
-        );
-        Mat4* projection = mat4_perspective(
-            60.f,
-            (float)currentWindowWidth / currentWindowHeight,
-            0.01f, 
-            100.f
-        );
+        mat4_load_identity(&model);
+        mat4_load_identity(&view); 
+        mat4_load_identity(&projection);
+        mat4_load_identity(&mvp);
 
-        Mat4* mvp = mat4_multiply_many(3, view, model, projection);
+        mat4_lookAt_inplace(&view, camera.position, vec3_add(camera.position, front), vec3(0.f, 1.f, 0.f));
+        mat4_perspective_inplace(&projection, 60.f, (float)currentWindowWidth / currentWindowHeight, 0.01f, 100.f);
+        mat4_multiply_many_inplace(&mvp, 3, &model, &view, &projection);
+
         GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(*mvp));
 
         vao_bind(VAO);
         glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, NULL);
         vao_unbind(VAO);
-
-        free(model);
-        free(view);
-        free(projection);
-        free(mvp);
 
         glfwSetInputMode(
             window,
@@ -315,154 +286,6 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height)
     currentWindowWidth = width;
     currentWindowHeight = height;
     glViewport(0, 0, width, height);
-}
-
-// Shader
-
-Shader shader_create(const char* vertexShaderSource, const char* fragmentShaderSource)
-{
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(vertexShader);
-    glCompileShader(fragmentShader);
-
-    char infoLog[512];
-    int success = 0;
-
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        fprintf(stderr, "Failed to compile the vertex shader!\n");
-        fprintf(stderr, "Error:\n%s\n", infoLog);
-    }
-
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        fprintf(stderr, "Failed to compile the fragment shader!\n");
-        fprintf(stderr, "Error:\n%s\n", infoLog);
-    }
-
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success)
-    {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        fprintf(stderr, "Failed to link the shader program!\n");
-        fprintf(stderr, "Error:\n%s\n", infoLog);
-    }
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    return shaderProgram;
-}
-
-void shader_use(Shader ID)
-{
-    glUseProgram(ID);
-}
-
-void shader_delete(Shader ID)
-{
-    glDeleteProgram(ID);
-}
-
-// VAO
-
-VAO vao_create()
-{
-    GLuint VAO;
-    glGenVertexArrays(1, &VAO);
-    return VAO;
-}
-
-void vao_linkAttrib(VBO VBO, GLuint index, GLuint size, GLenum type, GLsizei stride, const void* offset)
-{
-    vbo_bind(VBO);
-    glVertexAttribPointer(index, size, type, GL_FALSE, stride, offset);
-    glEnableVertexAttribArray(index);
-    vbo_unbind(VBO);
-}
-
-void vao_bind(VAO VAO)
-{
-    glBindVertexArray(VAO);
-}
-
-void vao_unbind(VAO VAO)
-{
-    (void)VAO;
-    glBindVertexArray(0);
-}
-
-void vao_delete(VAO* VAO)
-{
-    glDeleteVertexArrays(1, VAO);
-}
-// VBO
-
-VBO vbo_create(const GLfloat* vertices, GLsizeiptr verticesSize)
-{
-    GLuint VBO;
-    glGenBuffers(1, &VBO);
-    vbo_bind(VBO);
-    glBufferData(GL_ARRAY_BUFFER, verticesSize, vertices, GL_STATIC_DRAW);
-    vbo_unbind(VBO);
-    return VBO;
-}
-
-void vbo_bind(VBO VBO)
-{
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-}
-
-void vbo_unbind(VBO VBO)
-{
-    (void)VBO;
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-void vbo_delete(VBO* VBO)
-{
-    glDeleteBuffers(1, VBO);
-}
-
-// EBO
-
-EBO ebo_create(const GLuint* indices, GLsizeiptr indicesSize)
-{
-    GLuint EBO;
-    glGenBuffers(1, &EBO);
-    ebo_bind(EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indicesSize, indices, GL_STATIC_DRAW);
-    ebo_unbind(EBO);
-    return EBO;
-}
-
-void ebo_bind(EBO EBO)
-{
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-}
-
-void ebo_unbind(EBO EBO)
-{
-    (void)EBO;
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-void ebo_delete(EBO* EBO)
-{
-    glDeleteBuffers(1, EBO);
 }
 
 // Camera
