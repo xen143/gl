@@ -66,6 +66,10 @@ const GLuint indices[] =
     5, 0, 1, // Bottom
 };
 
+Camera camera;
+
+void framebufferSizeCallback(int width, int height);
+
 int main()
 {
     if (!glfwInit())
@@ -77,35 +81,36 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    Window window = window_create(
+    Window* window = window_create(
         WINDOW_WIDTH,
         WINDOW_HEIGHT,
         WINDOW_TITLE
     );
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    window_setResizeCallback(window, framebufferSizeCallback);
 
     Chunk* chunk = chunk_create(0, 0);
     chunk_generateMesh(chunk);
 
-    bool lockPressed = false;
-    Camera camera = camera_create(
+    camera = camera_create(
         CAMERA_FOV,
         CAMERA_SPEED,
         CAMERA_SENSITIVITY,
         CAMERA_INITIAL_ASPECT
     );
+    bool lockPressed = false;
 
     Mat4 model;
     mat4_load_identity(&model);
 
-    while (!window_shouldClose(&window))
+    while (!window_shouldClose(window))
     {
         shader_use(shader);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        window_updateDeltaTime(&window);
+        window_updateDeltaTime(window);
 
-        if (window_isKeyPressed(&window, GLFW_KEY_E))
+        if (window_isKeyPressed(window, GLFW_KEY_E))
         {
             if (!lockPressed)
             {
@@ -114,8 +119,8 @@ int main()
                     ? camera_unlock(&camera)
                     : camera_lock(&camera);
                 camera.locked
-                    ? window_hideCursor(&window)
-                    : window_showCursor(&window);
+                    ? window_hideCursor(window)
+                    : window_showCursor(window);
             }
         } else {
             lockPressed = false;
@@ -123,9 +128,9 @@ int main()
 
         if (camera.locked)
         {
-            camera_recomputePosition(&camera, &window);
-            camera_recomputeRotation(&camera, &window);
-            window_centerCursor(&window);
+            camera_recomputePosition(&camera, window);
+            camera_recomputeRotation(&camera, window);
+            window_centerCursor(window);
         }
 
         camera_recomputeMatrix(&camera);
@@ -134,13 +139,18 @@ int main()
 
         chunk_render(chunk);
 
-        window_swapBuffers(&window);
+        window_swapBuffers(window);
         glfwPollEvents();
     }
 
     chunk_destroy(chunk);
     shader_delete(shader);
-    window_destroy(&window);
+    window_destroy(window);
     glfwTerminate();
     return EXIT_SUCCESS;
+}
+
+void framebufferSizeCallback(int width, int height)
+{
+    camera_updateAspectRatio(&camera, (float)width / height);
 }

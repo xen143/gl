@@ -2,11 +2,13 @@
 
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 
-Window window_create(int width, int height, const char* title)
+Window* window_create(int width, int height, const char* title)
 {
-    Window window =
+    Window* window = malloc(sizeof(Window));
+    *window = (Window)
     {
         .glfwWindow = NULL,
+        .resizeCallback = NULL,
         .width = width,
         .height = height,
         .deltaTime = 0.f,
@@ -25,10 +27,10 @@ Window window_create(int width, int height, const char* title)
         fprintf(stderr, "Failed to initialize a window!\n");
         exit(EXIT_FAILURE);
     }
-    window.glfwWindow = glfwWindow;
+    window->glfwWindow = glfwWindow;
 
     glfwSetFramebufferSizeCallback(glfwWindow, framebufferSizeCallback);
-    glfwSetWindowUserPointer(glfwWindow, &window);
+    glfwSetWindowUserPointer(glfwWindow, window);
     glfwMakeContextCurrent(glfwWindow);
 
     GLenum glewStatus = glewInit();
@@ -66,6 +68,7 @@ void window_destroy(Window* window)
     window->glfwWindow = NULL;
     window->width = 0;
     window->height = 0;
+    free(window);
 }
 
 bool window_shouldClose(Window* window)
@@ -123,10 +126,18 @@ Vec3 window_getMovementVec(Window* window)
     return movementVec;
 }
 
+void window_setResizeCallback(Window* window, WindowResizeCallback callback)
+{
+    window->resizeCallback = callback;
+}
+
 static void framebufferSizeCallback(GLFWwindow* glfwWindow, int width, int height)
 {
     Window* window = glfwGetWindowUserPointer(glfwWindow);
     window->width = width;
     window->height = height;
     glViewport(0, 0, width, height);
+    if (window->resizeCallback != NULL) {
+        window->resizeCallback(width, height);
+    }
 }

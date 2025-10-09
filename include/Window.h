@@ -9,26 +9,31 @@
 
 #include "./Space.h"
 
+typedef void (*WindowResizeCallback)(int width, int height);
+
 typedef struct
 {
     GLFWwindow* glfwWindow;
+    WindowResizeCallback resizeCallback;
     int width;
     int height;
     float deltaTime;
     float _lastTime;
 } Window;
 
-Window window_create(int width, int height, const char* title);
-void   window_swapBuffers(Window* window);
-void   window_updateDeltaTime(Window* window);
-void   window_destroy(Window* window);
-bool   window_shouldClose(Window* window);
-bool   window_isKeyPressed(Window* window, int key);
+Window* window_create(int width, int height, const char* title);
+void    window_swapBuffers(Window* window);
+void    window_updateDeltaTime(Window* window);
+void    window_destroy(Window* window);
+bool    window_shouldClose(Window* window);
+bool    window_isKeyPressed(Window* window, int key);
 
 void window_showCursor(Window* window);
 void window_hideCursor(Window* window);
 void window_centerCursor(Window* window);
 
 Vec3 window_getMovementVec(Window* window);
+
+void window_setResizeCallback(Window* window, WindowResizeCallback callback);
 
 #endif // WINDOW_H
