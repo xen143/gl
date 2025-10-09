@@ -24,19 +24,33 @@ const float CAMERA_SENSITIVITY    = 0.25f;
 const char* vertexShaderSource =
     "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
-    "out vec3 vertCol;\n"
+    "layout (location = 1) in vec3 aNorm;\n"
+    "out vec3 vertNorm;\n"
     "uniform mat4 cameraMatrix;\n"
     "uniform mat4 modelMatrix;\n"
     "void main()\n"
     "{\n"
+    "  vertNorm = aNorm;\n"
     "  gl_Position = cameraMatrix * modelMatrix * vec4(aPos, 1.f);\n"
     "}\0";
 const char* fragmentShaderSource =
     "#version 330 core\n"
+    "in vec3 vertNorm;\n"
     "out vec4 FragColor;\n"
     "void main()\n"
     "{\n"
-    "  FragColor = vec4(1.f, 1.f, 1.f, 1.f);\n"
+    "  if (vertNorm.z > 0.5)\n"
+    "  {\n"
+    "    FragColor = vec4(0.2, 0.2, 0.2, 1.0);\n"
+    "  }\n"
+    "  else if (vertNorm.x > 0.5)\n"
+    "  {\n"
+    "    FragColor = vec4(0.2, 0.2, 0.2, 1.0);\n"
+    "  }\n"
+    "  else\n"
+    "  {\n"
+    "    FragColor = vec4(0.3, 0.3, 0.3, 1.0);\n"
+    "  }\n"
     "}\0";
 
 const GLfloat vertices[] =
@@ -87,8 +101,8 @@ int main()
         WINDOW_TITLE
     );
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     window_setResizeCallback(window, framebufferSizeCallback);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     Chunk* chunk = chunk_create(0, 0);
     chunk_generateMesh(chunk);

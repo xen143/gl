@@ -1,8 +1,10 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#define CHUNK_SIZE 8
-#define CHUNK_HEIGHT 8
+#define CHUNK_SIZE 16
+#define CHUNK_HEIGHT 32
+
+#include <stdbool.h>
 
 #include "./Graphics.h"
 #include "./Space.h"
@@ -26,6 +28,7 @@ typedef struct
 typedef struct
 {
     Vec3 position;
+    Vec3 normal;
 } ChunkVertex;
 
 Chunk* chunk_create(int chunkX, int chunkZ);
