@@ -9,6 +9,8 @@ Window window_create(int width, int height, const char* title)
         .glfwWindow = NULL,
         .width = width,
         .height = height,
+        .deltaTime = 0.f,
+        ._lastTime = 0.f,
     };
     GLFWwindow* glfwWindow = glfwCreateWindow(
         width,
@@ -49,6 +51,13 @@ Window window_create(int width, int height, const char* title)
 void window_swapBuffers(Window* window)
 {
     glfwSwapBuffers(window->glfwWindow);
+}
+
+void window_updateDeltaTime(Window* window)
+{
+    double currentTime = glfwGetTime();
+    window->deltaTime = currentTime - window->_lastTime;
+    window->_lastTime = currentTime;
 }
 
 void window_destroy(Window* window)

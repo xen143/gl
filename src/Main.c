@@ -7,25 +7,9 @@
 #include <stdio.h>
 
 #include "../include/Window.h"
+#include "../include/Camera.h"
 #include "../include/Graphics.h"
 #include "../include/Space.h"
-
-typedef struct
-{
-    Vec3 position;
-    Vec3 front;
-    float yaw;
-    float pitch;
-    float fov;
-    float speed;
-    float sensitivity;
-    float aspectRatio;
-    bool locked;
-} Camera;
-
-Camera camera_create(float fov, float speed, float sensitivity, float aspectRatio);
-void   camera_recomputeRotation(Camera* camera, Window* window);
-void   camera_updateAspectRatio(Camera* camera, float aspectRatio);
 
 const unsigned int WINDOW_WIDTH  = 800;
 const unsigned int WINDOW_HEIGHT = 600;
@@ -41,11 +25,12 @@ const char* vertexShaderSource =
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec3 aCol;\n"
     "out vec3 vertCol;\n"
-    "uniform mat4 mvp;\n"
+    "uniform mat4 cameraMatrix;\n"
+    "uniform mat4 modelMatrix;\n"
     "void main()\n"
     "{\n"
     "  vertCol = aCol;\n"
-    "  gl_Position = mvp * vec4(aPos, 1.f);\n"
+    "  gl_Position = cameraMatrix * modelMatrix * vec4(aPos, 1.f);\n"
     "}\0";
 const char* fragmentShaderSource =
     "#version 330 core\n"
@@ -117,8 +102,6 @@ int main()
     ebo_unbind(EBO);
 
     bool lockPressed = false;
-    float lastTime = 0.f;
-    float deltaTime = 0.f;
 
     Camera camera = camera_create(
         CAMERA_FOV,
@@ -128,23 +111,22 @@ int main()
     );
 
     Mat4 model;
-    Mat4 view;
-    Mat4 projection;
-    Mat4 mvp;
+    mat4_load_identity(&model);
 
     while (!window_shouldClose(&window))
     {
         shader_use(shader);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        deltaTime = glfwGetTime() - lastTime;
+        window_updateDeltaTime(&window);
 
         if (window_isKeyPressed(&window, GLFW_KEY_E))
         {
             if (!lockPressed)
             {
-                camera.locked = !camera.locked;
                 lockPressed = true;
+                camera.locked
+                    ? camera_unlock(&camera)
+                    : camera_lock(&camera);
                 camera.locked
                     ? window_hideCursor(&window)
                     : window_showCursor(&window);
@@ -153,44 +135,21 @@ int main()
             lockPressed = false;
         }
 
-        Vec3 front = vec3(0.f, 0.f, 0.f);
-        front.x = cosf(radians(camera.yaw)) * cosf(radians(camera.pitch));
-        front.y = sinf(radians(camera.pitch));
-        front.z = sinf(radians(camera.yaw)) * cosf(radians(camera.pitch));
-        camera.front = vec3_normalize(front);
-
         if (camera.locked)
         {
-            Vec3 movementVec = vec3_normalize(window_getMovementVec(&window));
-            Vec3 movementDirection = vec3(0.f, 0.f, 0.f);
-            Vec3 right = vec3_normalize(vec3_cross(camera.front, vec3(0.f, 1.f, 0.f)));
-            
-            movementDirection = vec3_add(movementDirection, vec3_scale(camera.front, movementVec.z));
-            movementDirection = vec3_add(movementDirection, vec3_scale(right, movementVec.x));
-            movementDirection = vec3_add(movementDirection, vec3_scale(vec3(0, 1.f, 0.f), movementVec.y));
-            
-            movementDirection = vec3_normalize(movementDirection);
-            camera.position = vec3_add(camera.position, vec3_scale(movementDirection, CAMERA_SPEED * deltaTime));
-            
+            camera_recomputePosition(&camera, &window);
             camera_recomputeRotation(&camera, &window);
             window_centerCursor(&window);
         }
 
-        mat4_load_identity(&model);
-        mat4_load_identity(&view); 
-        mat4_load_identity(&projection);
-        mat4_load_identity(&mvp);
-
-        mat4_lookAt_inplace(&view, camera.position, vec3_add(camera.position, front), vec3(0.f, 1.f, 0.f));
-        mat4_perspective_inplace(&projection, 60.f, (float)window.width / window.height, 0.01f, 100.f);
-        mat4_multiply_many_inplace(&mvp, 3, &model, &view, &projection);
-        shader_setMat4(shader, "mvp", &mvp);
+        camera_recomputeMatrix(&camera);
+        shader_setMat4(shader, "cameraMatrix", &camera.matrix);
+        shader_setMat4(shader, "modelMatrix", &model);
 
         vao_bind(VAO);
         glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, NULL);
         vao_unbind(VAO);
 
-        lastTime = glfwGetTime();
         window_swapBuffers(&window);
         glfwPollEvents();
     }
@@ -203,53 +162,4 @@ int main()
     window_destroy(&window);
     glfwTerminate();
     return EXIT_SUCCESS;
-}
-
-Camera camera_create(float fov, float speed, float sensitivity, float aspectRatio)
-{
-    Camera camera =
-    {
-        .position = vec3(0.f, 0.f, 0.f),
-        .front = vec3(0.f, 0.f, -1.f),
-        .yaw = -90.f,
-        .pitch = 0.f,
-        .fov = fov,
-        .speed = speed,
-        .sensitivity = sensitivity,
-        .aspectRatio = aspectRatio,
-        .locked = false,
-    };
-    return camera;
-}
-
-void camera_recomputeRotation(Camera* camera, Window* window)
-{
-    double mouseX;
-    double mouseY;
-    glfwGetCursorPos(window->glfwWindow, &mouseX, &mouseY);
-
-    int windowWidth;
-    int windowHeight;
-    glfwGetFramebufferSize(window->glfwWindow, &windowWidth, &windowHeight);
-
-    const float deltaX = (float)(mouseX - (float)windowWidth / 2.f) * CAMERA_SENSITIVITY;
-    const float deltaY = (float)(mouseY - (float)windowHeight / 2.f) * CAMERA_SENSITIVITY;
-
-    camera->yaw += deltaX * camera->sensitivity;
-    camera->pitch -= deltaY * camera->sensitivity;
-
-    if (camera->pitch > 89.f)
-    {
-        camera->pitch = 89.f;
-    }
-    else if (camera->pitch < -89.f)
-    {
-        camera->pitch = -89.f;
-    }
-    camera->yaw = fmod(camera->yaw, 360.f);
-}
-
-void camera_updateAspectRatio(Camera* camera, float aspectRatio)
-{
-    camera->aspectRatio = aspectRatio;
 }

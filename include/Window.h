@@ -14,10 +14,13 @@ typedef struct
     GLFWwindow* glfwWindow;
     int width;
     int height;
+    float deltaTime;
+    float _lastTime;
 } Window;
 
 Window window_create(int width, int height, const char* title);
 void   window_swapBuffers(Window* window);
+void   window_updateDeltaTime(Window* window);
 void   window_destroy(Window* window);
 bool   window_shouldClose(Window* window);
 bool   window_isKeyPressed(Window* window, int key);
