@@ -10,6 +10,7 @@
 #include "../include/Camera.h"
 #include "../include/Graphics.h"
 #include "../include/Space.h"
+#include "../include/Chunk.h"
 
 const unsigned int WINDOW_WIDTH  = 800;
 const unsigned int WINDOW_HEIGHT = 600;
@@ -23,22 +24,19 @@ const float CAMERA_SENSITIVITY    = 0.25f;
 const char* vertexShaderSource =
     "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
-    "layout (location = 1) in vec3 aCol;\n"
     "out vec3 vertCol;\n"
     "uniform mat4 cameraMatrix;\n"
     "uniform mat4 modelMatrix;\n"
     "void main()\n"
     "{\n"
-    "  vertCol = aCol;\n"
     "  gl_Position = cameraMatrix * modelMatrix * vec4(aPos, 1.f);\n"
     "}\0";
 const char* fragmentShaderSource =
     "#version 330 core\n"
-    "in vec3 vertCol;\n"
     "out vec4 FragColor;\n"
     "void main()\n"
     "{\n"
-    "  FragColor = vec4(vertCol, 1.f);\n"
+    "  FragColor = vec4(1.f, 1.f, 1.f, 1.f);\n"
     "}\0";
 
 const GLfloat vertices[] =
@@ -84,25 +82,13 @@ int main()
         WINDOW_HEIGHT,
         WINDOW_TITLE
     );
-
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
-    VAO VAO = vao_create();
-    VBO VBO = vbo_create(vertices, sizeof(vertices));
-    EBO EBO = ebo_create(indices, sizeof(indices));
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    vao_bind(VAO);
-    vbo_bind(VBO);
-    ebo_bind(EBO);
-
-    vao_linkAttrib(VBO, 0, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void*)(0));
-    vao_linkAttrib(VBO, 1, 3, GL_FLOAT, 6 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
-
-    vao_unbind(VAO);
-    vbo_unbind(VBO);
-    ebo_unbind(EBO);
+    Chunk* chunk = chunk_create(0, 0);
+    chunk_generateMesh(chunk);
 
     bool lockPressed = false;
-
     Camera camera = camera_create(
         CAMERA_FOV,
         CAMERA_SPEED,
@@ -146,18 +132,13 @@ int main()
         shader_setMat4(shader, "cameraMatrix", &camera.matrix);
         shader_setMat4(shader, "modelMatrix", &model);
 
-        vao_bind(VAO);
-        glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, NULL);
-        vao_unbind(VAO);
+        chunk_render(chunk);
 
         window_swapBuffers(&window);
         glfwPollEvents();
     }
 
-    vao_delete(&VAO);
-    vbo_delete(&VBO);
-    ebo_delete(&EBO);
-
+    chunk_destroy(chunk);
     shader_delete(shader);
     window_destroy(&window);
     glfwTerminate();

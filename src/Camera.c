@@ -4,7 +4,7 @@ Camera camera_create(float fov, float speed, float sensitivity, float aspectRati
 {
     Camera camera =
     {
-        .position = vec3(0.f, 0.f, 0.f),
+        .position = vec3(4.f, 2.f, 4.f),
         .front = vec3(0.f, 0.f, -1.f),
         .yaw = -90.f,
         .pitch = 0.f,
