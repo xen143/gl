@@ -3,7 +3,9 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <GL/glew.h> 
+#include <GL/glew.h>
+
+#include "./Space.h"
 
 typedef GLuint Shader;
 typedef GLuint VAO;
@@ -13,6 +15,7 @@ typedef GLuint EBO;
 Shader shader_create(const char* vertexShaderSource, const char* fragmentShaderSource);
 void   shader_use(Shader ID);
 void   shader_delete(Shader ID);
+void   shader_setMat4(Shader ID, const char* uniformName, Mat4* mat);
 
 VAO  vao_create();
 void vao_linkAttrib(VBO VBO, GLuint index, GLuint size, GLenum type, GLsizei stride, const void* offset);

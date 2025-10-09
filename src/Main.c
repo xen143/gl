@@ -6,10 +6,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "../include/Window.h"
 #include "../include/Graphics.h"
 #include "../include/Space.h"
-
-void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 
 typedef struct
 {
@@ -25,10 +24,8 @@ typedef struct
 } Camera;
 
 Camera camera_create(float fov, float speed, float sensitivity, float aspectRatio);
-void   camera_recomputeRotation(Camera* camera, GLFWwindow* window);
+void   camera_recomputeRotation(Camera* camera, Window* window);
 void   camera_updateAspectRatio(Camera* camera, float aspectRatio);
-
-Vec3 window_getMovementVec(GLFWwindow* window);
 
 const unsigned int WINDOW_WIDTH  = 800;
 const unsigned int WINDOW_HEIGHT = 600;
@@ -86,9 +83,6 @@ const GLuint indices[] =
     5, 0, 1, // Bottom
 };
 
-int currentWindowWidth  = WINDOW_WIDTH;
-int currentWindowHeight = WINDOW_HEIGHT;
-
 int main()
 {
     if (!glfwInit())
@@ -100,38 +94,13 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(
+    Window window = window_create(
         WINDOW_WIDTH,
         WINDOW_HEIGHT,
-        WINDOW_TITLE,
-        NULL,
-        NULL
+        WINDOW_TITLE
     );
-    if (!window)
-    {
-        glfwTerminate();
-        fprintf(stderr, "Failed to initialize a window!\n");
-        return EXIT_FAILURE;
-    }
-    glfwMakeContextCurrent(window);
-    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
-    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-
-    GLenum glewStatus = glewInit();
-    if (glewStatus != GLEW_OK)
-    {
-        fprintf(stderr, "Failed to initialize GLEW!\n");
-        fprintf(stderr, "Error:\n%s\n", glewGetErrorString(glewStatus));
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        return EXIT_FAILURE;
-    }
-
-    glEnable(GL_DEPTH_TEST);
-    glClearColor(0.f, 0.5f, 0.5f, 1.f);
 
     Shader shader = shader_create(vertexShaderSource, fragmentShaderSource);
-
     VAO VAO = vao_create();
     VBO VBO = vbo_create(vertices, sizeof(vertices));
     EBO EBO = ebo_create(indices, sizeof(indices));
@@ -163,24 +132,22 @@ int main()
     Mat4 projection;
     Mat4 mvp;
 
-    while (!glfwWindowShouldClose(window))
+    while (!window_shouldClose(&window))
     {
         shader_use(shader);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         deltaTime = glfwGetTime() - lastTime;
 
-        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+        if (window_isKeyPressed(&window, GLFW_KEY_E))
         {
             if (!lockPressed)
             {
                 camera.locked = !camera.locked;
                 lockPressed = true;
-                glfwSetInputMode(
-                    window,
-                    GLFW_CURSOR,
-                    camera.locked ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL
-                );
+                camera.locked
+                    ? window_hideCursor(&window)
+                    : window_showCursor(&window);
             }
         } else {
             lockPressed = false;
@@ -194,7 +161,7 @@ int main()
 
         if (camera.locked)
         {
-            Vec3 movementVec = vec3_normalize(window_getMovementVec(window));
+            Vec3 movementVec = vec3_normalize(window_getMovementVec(&window));
             Vec3 movementDirection = vec3(0.f, 0.f, 0.f);
             Vec3 right = vec3_normalize(vec3_cross(camera.front, vec3(0.f, 1.f, 0.f)));
             
@@ -205,8 +172,8 @@ int main()
             movementDirection = vec3_normalize(movementDirection);
             camera.position = vec3_add(camera.position, vec3_scale(movementDirection, CAMERA_SPEED * deltaTime));
             
-            camera_recomputeRotation(&camera, window);
-            glfwSetCursorPos(window, (double)currentWindowWidth / 2.f, (double)currentWindowHeight / 2.f);
+            camera_recomputeRotation(&camera, &window);
+            window_centerCursor(&window);
         }
 
         mat4_load_identity(&model);
@@ -215,24 +182,16 @@ int main()
         mat4_load_identity(&mvp);
 
         mat4_lookAt_inplace(&view, camera.position, vec3_add(camera.position, front), vec3(0.f, 1.f, 0.f));
-        mat4_perspective_inplace(&projection, 60.f, (float)currentWindowWidth / currentWindowHeight, 0.01f, 100.f);
+        mat4_perspective_inplace(&projection, 60.f, (float)window.width / window.height, 0.01f, 100.f);
         mat4_multiply_many_inplace(&mvp, 3, &model, &view, &projection);
-
-        GLuint mvpLoc = glGetUniformLocation(shader, "mvp");
-        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(*mvp));
+        shader_setMat4(shader, "mvp", &mvp);
 
         vao_bind(VAO);
         glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, NULL);
         vao_unbind(VAO);
 
-        glfwSetInputMode(
-            window,
-            GLFW_CURSOR,
-            camera.locked ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_NORMAL
-        );
-
         lastTime = glfwGetTime();
-        glfwSwapBuffers(window);
+        window_swapBuffers(&window);
         glfwPollEvents();
     }
 
@@ -241,54 +200,10 @@ int main()
     ebo_delete(&EBO);
 
     shader_delete(shader);
-    glfwDestroyWindow(window);
+    window_destroy(&window);
     glfwTerminate();
     return EXIT_SUCCESS;
 }
-
-// Main Logic
-
-Vec3 window_getMovementVec(GLFWwindow* window)
-{
-    Vec3 movementVec = vec3(0.f, 0.f, 0.f);
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-    {
-        movementVec.z += 1;
-    }
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-    {
-        movementVec.z -= 1;
-    }
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-    {
-        movementVec.x -= 1;
-    }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-    {
-        movementVec.x += 1;
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-    {
-        movementVec.y -= 1;
-    }
-    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-    {
-        movementVec.y += 1;
-    }
-    return movementVec;
-}
-
-// GL
-
-void framebufferSizeCallback(GLFWwindow* window, int width, int height)
-{
-    (void)window;
-    currentWindowWidth = width;
-    currentWindowHeight = height;
-    glViewport(0, 0, width, height);
-}
-
-// Camera
 
 Camera camera_create(float fov, float speed, float sensitivity, float aspectRatio)
 {
@@ -307,15 +222,15 @@ Camera camera_create(float fov, float speed, float sensitivity, float aspectRati
     return camera;
 }
 
-void camera_recomputeRotation(Camera* camera, GLFWwindow* window)
+void camera_recomputeRotation(Camera* camera, Window* window)
 {
     double mouseX;
     double mouseY;
-    glfwGetCursorPos(window, &mouseX, &mouseY);
+    glfwGetCursorPos(window->glfwWindow, &mouseX, &mouseY);
 
     int windowWidth;
     int windowHeight;
-    glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+    glfwGetFramebufferSize(window->glfwWindow, &windowWidth, &windowHeight);
 
     const float deltaX = (float)(mouseX - (float)windowWidth / 2.f) * CAMERA_SENSITIVITY;
     const float deltaY = (float)(mouseY - (float)windowHeight / 2.f) * CAMERA_SENSITIVITY;

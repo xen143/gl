@@ -58,6 +58,12 @@ void shader_delete(Shader ID)
     glDeleteProgram(ID);
 }
 
+void shader_setMat4(Shader ID, const char* uniformName, Mat4* mat)
+{
+    GLuint mvpLoc = glGetUniformLocation(ID, uniformName);
+    glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, (const GLfloat*)(mat));
+}
+
 VAO vao_create()
 {
     GLuint VAO;
